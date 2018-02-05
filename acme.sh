@@ -22,6 +22,8 @@ LETSENCRYPT_STAGING_CA_V2="https://acme-staging-v02.api.letsencrypt.org/director
 DEFAULT_CA=$LETSENCRYPT_CA_V1
 DEFAULT_STAGING_CA=$LETSENCRYPT_STAGING_CA_V1
 
+DEFAULT_AGREEMENT="https://letsencrypt.org/documents/LE-SA-v1.2-November-15-2017.pdf"
+
 DEFAULT_USER_AGENT="$PROJECT_NAME/$VER ($PROJECT)"
 DEFAULT_ACCOUNT_EMAIL=""
 
@@ -2352,6 +2354,9 @@ _initpath() {
     return 0
   fi
 
+  domain="$1"
+  _ilength="$2"
+
   if [ -z "$DOMAIN_PATH" ]; then
     domainhome="$CERT_HOME/$domain"
     domainhomeecc="$CERT_HOME/$domain$ECC_SUFFIX"
@@ -2902,30 +2907,54 @@ _clearupdns() {
 # webroot  removelevel tokenfile
 _clearupwebbroot() {
   __webroot="$1"
+  __domain="$4"
   if [ -z "$__webroot" ]; then
     _debug "no webroot specified, skip"
     return 0
   fi
 
-  _rmpath=""
-  if [ "$2" = '1' ]; then
-    _rmpath="$__webroot/.well-known"
-  elif [ "$2" = '2' ]; then
-    _rmpath="$__webroot/.well-known/acme-challenge"
-  elif [ "$2" = '3' ]; then
-    _rmpath="$__webroot/.well-known/acme-challenge/$3"
-  else
-    _debug "Skip for removelevel:$2"
-  fi
+	h_api="$(_findHook "$d" httpapi "$_currentRoot")"
+	_debug h_api "$h_api"
+	if [ "$h_api" ]; then
+	  _info "Found domain http api file: $h_api"
+	  (
+		if ! . "$h_api"; then
+		  _err "Load file $h_api error. Please check your api file and try again."
+		  return 1
+		fi
 
-  if [ "$_rmpath" ]; then
-    if [ "$DEBUG" ]; then
-      _debug "Debugging, skip removing: $_rmpath"
-    else
-      rm -rf "$_rmpath"
-    fi
-  fi
+		rmcommand="${_currentRoot}_rm"
+		if ! _exists "$rmcommand"; then
+		  _err "It seems that your api file is not correct, it must have a function named: $rmcommand"
+		  return 1
+		fi
 
+		if ! $rmcommand "$__domain" "$3"; then
+		  _err "Error rm webroot api for domain:$__webroot"
+		  return 1
+		fi
+	  )
+
+	else
+		_rmpath=""
+		if [ "$2" = '1' ]; then
+		  _rmpath="$__webroot/.well-known"
+		elif [ "$2" = '2' ]; then
+		  _rmpath="$__webroot/.well-known/acme-challenge"
+		elif [ "$2" = '3' ]; then
+		  _rmpath="$__webroot/.well-known/acme-challenge/$3"
+		else
+		  _debug "Skip for removelevel:$2"
+		fi
+
+		if [ "$_rmpath" ]; then
+		  if [ "$DEBUG" ]; then
+			_debug "Debugging, skip removing: $_rmpath"
+		  else
+			rm -rf "$_rmpath"
+		  fi
+		fi
+	fi
   return 0
 
 }
@@ -3741,7 +3770,30 @@ $_authorizations_map"
     _debug "_currentRoot" "$_currentRoot"
 
     if [ "$vtype" = "$VTYPE_HTTP" ]; then
-      if [ "$_currentRoot" = "$NO_VALUE" ]; then
+      h_api="$(_findHook "$d" httpapi "$_currentRoot")"
+      _debug h_api "$h_api"
+
+      if [ "$h_api" ]; then
+        _info "Found domain http api file: $h_api"
+        (
+          if ! . "$h_api"; then
+            _err "Load file $h_api error. Please check your api file and try again."
+            return 1
+          fi
+
+          addcommand="${_currentRoot}_add"
+          if ! _exists "$addcommand"; then
+            _err "It seems that your api file is not correct, it must have a function named: $addcommand"
+            return 1
+          fi
+
+          if ! $addcommand "$d" "$token" "$keyauthorization"; then
+            _err "Error add webroot for domain:$d"
+            return 1
+          fi
+        )
+
+      elif [ "$_currentRoot" = "$NO_VALUE" ]; then
         _info "Standalone mode server"
         _ncaddr="$(_getfield "$_local_addr" "$_ncIndex")"
         _ncIndex="$(_math $_ncIndex + 1)"
@@ -3796,7 +3848,7 @@ $_authorizations_map"
 
         if ! printf "%s" "$keyauthorization" >"$wellknown_path/$token"; then
           _err "$d:Can not write token to file : $wellknown_path/$token"
-          _clearupwebbroot "$_currentRoot" "$removelevel" "$token"
+          _clearupwebbroot "$_currentRoot" "$removelevel" "$token" "$d"
           _clearup
           _on_issue_err "$_post_hook" "$vlist"
           return 1
@@ -3844,7 +3896,7 @@ $_authorizations_map"
       _ncIndex="$(_math "$_ncIndex" + 1)"
       if ! _starttlsserver "$_SAN_B" "$_SAN_A" "$Le_TLSPort" "$keyauthorization" "$_ncaddr"; then
         _err "Start tls server error."
-        _clearupwebbroot "$_currentRoot" "$removelevel" "$token"
+        _clearupwebbroot "$_currentRoot" "$removelevel" "$token" "$d"
         _clearup
         _on_issue_err "$_post_hook" "$vlist"
         return 1
@@ -3853,7 +3905,7 @@ $_authorizations_map"
 
     if ! __trigger_validation "$uri" "$keyauthorization"; then
       _err "$d:Can not get challenge: $response"
-      _clearupwebbroot "$_currentRoot" "$removelevel" "$token"
+      _clearupwebbroot "$_currentRoot" "$removelevel" "$token" "$d"
       _clearup
       _on_issue_err "$_post_hook" "$vlist"
       return 1
@@ -3864,7 +3916,7 @@ $_authorizations_map"
         _debug "trigger validation code: $code"
       else
         _err "$d:Challenge error: $response"
-        _clearupwebbroot "$_currentRoot" "$removelevel" "$token"
+        _clearupwebbroot "$_currentRoot" "$removelevel" "$token" "$d"
         _clearup
         _on_issue_err "$_post_hook" "$vlist"
         return 1
@@ -3880,7 +3932,7 @@ $_authorizations_map"
       waittimes=$(_math "$waittimes" + 1)
       if [ "$waittimes" -ge "$MAX_RETRY_TIMES" ]; then
         _err "$d:Timeout"
-        _clearupwebbroot "$_currentRoot" "$removelevel" "$token"
+        _clearupwebbroot "$_currentRoot" "$removelevel" "$token" "$d"
         _clearup
         _on_issue_err "$_post_hook" "$vlist"
         return 1
@@ -3892,7 +3944,7 @@ $_authorizations_map"
       response="$(_get "$uri")"
       if [ "$?" != "0" ]; then
         _err "$d:Verify error:$response"
-        _clearupwebbroot "$_currentRoot" "$removelevel" "$token"
+        _clearupwebbroot "$_currentRoot" "$removelevel" "$token" "$d"
         _clearup
         _on_issue_err "$_post_hook" "$vlist"
         return 1
@@ -3907,7 +3959,7 @@ $_authorizations_map"
         _info "$(__green Success)"
         _stopserver "$serverproc"
         serverproc=""
-        _clearupwebbroot "$_currentRoot" "$removelevel" "$token"
+        _clearupwebbroot "$_currentRoot" "$removelevel" "$token" "$d"
         break
       fi
 
@@ -3927,7 +3979,7 @@ $_authorizations_map"
             _get "http://$d/.well-known/acme-challenge/$token" "" 1
           fi
         fi
-        _clearupwebbroot "$_currentRoot" "$removelevel" "$token"
+        _clearupwebbroot "$_currentRoot" "$removelevel" "$token" "$d"
         _clearup
         _on_issue_err "$_post_hook" "$vlist"
         return 1
@@ -3937,7 +3989,7 @@ $_authorizations_map"
         _info "Pending"
       else
         _err "$d:Verify error:$response"
-        _clearupwebbroot "$_currentRoot" "$removelevel" "$token"
+        _clearupwebbroot "$_currentRoot" "$removelevel" "$token" "$d"
         _clearup
         _on_issue_err "$_post_hook" "$vlist"
         return 1
