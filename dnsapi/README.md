@@ -409,10 +409,13 @@ acme.sh --issue --dns dns_dgon -d example.com -d www.example.com
 
 ## 21. Use ClouDNS.net API
 
-You need to set the HTTP API user ID and password credentials. See: https://www.cloudns.net/wiki/article/42/
+You need to set the HTTP API user ID and password credentials. See: https://www.cloudns.net/wiki/article/42/. For security reasons, it's recommended to use a sub user ID that only has access to the necessary zones, as a regular API user has access to your entire account.
 
 ```
-export CLOUDNS_AUTH_ID=XXXXX
+# Use this for a sub auth ID
+export CLOUDNS_SUB_AUTH_ID=XXXXX
+# Use this for a regular auth ID
+#export CLOUDNS_AUTH_ID=XXXXX
 export CLOUDNS_AUTH_PASSWORD="YYYYYYYYY"
 ```
 
@@ -512,7 +515,7 @@ acme.sh --issue --dns dns_nsone -d example.com -d www.example.com
 export DuckDNS_Token="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 ```
 
-Please note that since DuckDNS uses StartSSL as their cert provider, thus 
+Please note that since DuckDNS uses StartSSL as their cert provider, thus
 --insecure may need to be used when issuing certs:
 ```
 acme.sh --insecure --issue --dns dns_duckdns -d mydomain.duckdns.org
@@ -585,7 +588,7 @@ For issues, please report to https://github.com/non7top/acme.sh/issues.
 
 ## 31. Use Hurricane Electric
 
-Hurricane Electric doesn't have an API so just set your login credentials like so:
+Hurricane Electric (https://dns.he.net/) doesn't have an API so just set your login credentials like so:
 
 ```
 export HE_Username="yourusername"
@@ -719,6 +722,40 @@ acme.sh --issue --dns dns_selectel -d example.com -d www.example.com
 
 The `SL_Key` will be saved in `~/.acme.sh/account.conf` and will be reused when needed.
 
+## 39. Use zonomi.com domain API to automatically issue cert
+
+First you need to login to your account to find your API key from: http://zonomi.com/app/dns/dyndns.jsp
+
+Your will find your api key in the example urls:
+
+```sh
+https://zonomi.com/app/dns/dyndns.jsp?host=example.com&api_key=1063364558943540954358668888888888
+```
+
+```sh
+export ZM_Key="1063364558943540954358668888888888"
+
+```
+
+Ok, let's issue a cert now:
+```
+acme.sh --issue --dns dns_zonomi -d example.com -d www.example.com
+```
+
+The `ZM_Key` will be saved in `~/.acme.sh/account.conf` and will be reused when needed.
+
+## 40. Use DreamHost DNS API
+
+DNS API keys may be created at https://panel.dreamhost.com/?tree=home.api.
+Ensure the created key has add and remove privelages.
+
+```
+export DH_API_Key="<api key>"
+acme.sh --issue --dns dns_dreamhost -d example.com -d www.example.com
+```
+
+The 'DH_API_KEY' will be saved in `~/.acme.sh/account.conf` and will
+be reused when needed.
 
 # Use custom API
 
