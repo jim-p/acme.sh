@@ -3411,7 +3411,7 @@ issue() {
     _main_domain=$(echo "$2,$3" | cut -d , -f 1)
     _alt_domains=$(echo "$2,$3" | cut -d , -f 2- | sed "s/,${NO_VALUE}$//")
   fi
-  _key_length="$4"
+  _key_length="${4}"
   _real_cert="$5"
   _real_key="$6"
   _real_ca="$7"
@@ -3513,6 +3513,11 @@ issue() {
   else
     _key=$(_readdomainconf Le_Keylength)
     _debug "Read key length:$_key"
+
+    if [ -z "${_key_length}" ] && [ ! -z "${_key}" ]; then
+      _key_length="${_key}"
+    fi
+
     if [ ! -f "$CERT_KEY_PATH" ] || [ "$_key_length" != "$_key" ] || [ "$Le_ForceNewDomainKey" = "1" ]; then
       if ! createDomainKey "$_main_domain" "$_key_length"; then
         _err "Create domain key error."
