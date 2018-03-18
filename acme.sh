@@ -3287,6 +3287,7 @@ _regAccount() {
     return 1
   fi
 
+  _debug2 responseHeaders "$responseHeaders"
   _accUri="$(echo "$responseHeaders" | grep "^Location:" | _head_n 1 | cut -d ' ' -f 2 | tr -d "\r\n")"
   _debug "_accUri" "$_accUri"
   _savecaconf "ACCOUNT_URL" "$_accUri"
