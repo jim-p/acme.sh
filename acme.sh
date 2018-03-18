@@ -1619,6 +1619,7 @@ _post() {
   _debug $httpmethod
   _debug "_post_url" "$_post_url"
   _debug2 "body" "$body"
+  _debug2 "_postContentType" "$_postContentType"
 
   _inithttp
 
@@ -1787,6 +1788,11 @@ _send_signed_request() {
     return 1
   fi
 
+  if [ "$ACME_VERSION" = "2" ]; then
+    __request_conent_type="$CONTENT_TYPE_JSON"
+  else
+    __request_conent_type=""
+  fi
   payload64=$(printf "%s" "$payload" | _base64 | _url_replace)
   _debug3 payload64 "$payload64"
 
@@ -1799,7 +1805,7 @@ _send_signed_request() {
       if [ "$ACME_NEW_NONCE" ]; then
         _debug2 "Get nonce. ACME_NEW_NONCE" "$ACME_NEW_NONCE"
         nonceurl="$ACME_NEW_NONCE"
-        if _post "" "$nonceurl" "" "HEAD" "$CONTENT_TYPE_JSON"; then
+        if _post "" "$nonceurl" "" "HEAD" "$__request_conent_type"; then
           _headers="$(cat "$HTTP_HEADER")"
         fi
       fi
@@ -1865,7 +1871,7 @@ _send_signed_request() {
     fi
     _debug3 body "$body"
 
-    response="$(_post "$body" "$url" "$needbase64" "POST" "$CONTENT_TYPE_JSON")"
+    response="$(_post "$body" "$url" "$needbase64" "POST" "$__request_conent_type")"
     _CACHED_NONCE=""
 
     if [ "$?" != "0" ]; then
