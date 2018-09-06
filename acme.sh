@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 
-VER=2.7.9
+VER=2.8.0
 
 PROJECT_NAME="acme.sh"
 
@@ -126,21 +126,21 @@ if [ -t 1 ]; then
 fi
 
 __green() {
-  if [ "$__INTERACTIVE${ACME_NO_COLOR}" = "1" ]; then
+  if [ "$__INTERACTIVE${ACME_NO_COLOR}" = "1" -o "${ACME_FORCE_COLOR}" = "1" ]; then
     printf '\033[1;31;32m'
   fi
   printf -- "%b" "$1"
-  if [ "$__INTERACTIVE${ACME_NO_COLOR}" = "1" ]; then
+  if [ "$__INTERACTIVE${ACME_NO_COLOR}" = "1" -o "${ACME_FORCE_COLOR}" = "1" ]; then
     printf '\033[0m'
   fi
 }
 
 __red() {
-  if [ "$__INTERACTIVE${ACME_NO_COLOR}" = "1" ]; then
+  if [ "$__INTERACTIVE${ACME_NO_COLOR}" = "1" -o "${ACME_FORCE_COLOR}" = "1" ]; then
     printf '\033[1;31;40m'
   fi
   printf -- "%b" "$1"
-  if [ "$__INTERACTIVE${ACME_NO_COLOR}" = "1" ]; then
+  if [ "$__INTERACTIVE${ACME_NO_COLOR}" = "1" -o "${ACME_FORCE_COLOR}" = "1" ]; then
     printf '\033[0m'
   fi
 }
@@ -1329,6 +1329,7 @@ createDomainKey() {
     if _createkey "$_cdl" "$CERT_KEY_PATH"; then
       _savedomainconf Le_Keylength "$_cdl"
       _info "The domain key is here: $(__green $CERT_KEY_PATH)"
+      return 0
     fi
   else
     if [ "$IS_RENEW" ]; then
@@ -1376,17 +1377,17 @@ _url_replace() {
 }
 
 _time2str() {
-  #Linux
-  if date -u -d@"$1" 2>/dev/null; then
-    return
-  fi
-
   #BSD
   if date -u -r "$1" 2>/dev/null; then
     return
   fi
 
-  #Soaris
+  #Linux
+  if date -u -d@"$1" 2>/dev/null; then
+    return
+  fi
+
+  #Solaris
   if _exists adb; then
     _t_s_a=$(echo "0t${1}=Y" | adb)
     echo "$_t_s_a"
@@ -1609,7 +1610,7 @@ _inithttp() {
 
 }
 
-# body  url [needbase64] [POST|PUT] [ContentType]
+# body  url [needbase64] [POST|PUT|DELETE] [ContentType]
 _post() {
   body="$1"
   _post_url="$2"
@@ -1797,15 +1798,13 @@ _send_signed_request() {
     return 1
   fi
 
-  if [ "$ACME_VERSION" = "2" ]; then
-    __request_conent_type="$CONTENT_TYPE_JSON"
-  else
-    __request_conent_type=""
-  fi
+  __request_conent_type="$CONTENT_TYPE_JSON"
+
   payload64=$(printf "%s" "$payload" | _base64 | _url_replace)
   _debug3 payload64 "$payload64"
 
-  MAX_REQUEST_RETRY_TIMES=5
+  MAX_REQUEST_RETRY_TIMES=20
+  _sleep_retry_sec=1
   _request_retry_times=0
   while [ "${_request_retry_times}" -lt "$MAX_REQUEST_RETRY_TIMES" ]; do
     _request_retry_times=$(_math "$_request_retry_times" + 1)
@@ -1910,9 +1909,10 @@ _send_signed_request() {
       _debug3 _body "$_body"
     fi
 
-    if _contains "$_body" "JWS has invalid anti-replay nonce"; then
-      _info "It seems the CA server is busy now, let's wait and retry."
-      _sleep 5
+    if _contains "$_body" "JWS has invalid anti-replay nonce" || _contains "$_body" "JWS has an invalid anti-replay nonce"; then
+      _info "It seems the CA server is busy now, let's wait and retry. Sleeping $_sleep_retry_sec seconds."
+      _CACHED_NONCE=""
+      _sleep $_sleep_retry_sec
       continue
     fi
     break
@@ -4744,19 +4744,19 @@ _installcert() {
     if [ -f "$_real_cert" ] && [ ! "$IS_RENEW" ]; then
       cp "$_real_cert" "$_backup_path/cert.bak"
     fi
-    cat "$CERT_PATH" >"$_real_cert"
+    cat "$CERT_PATH" >"$_real_cert" || return 1
   fi
 
   if [ "$_real_ca" ]; then
     _info "Installing CA to:$_real_ca"
     if [ "$_real_ca" = "$_real_cert" ]; then
       echo "" >>"$_real_ca"
-      cat "$CA_CERT_PATH" >>"$_real_ca"
+      cat "$CA_CERT_PATH" >>"$_real_ca" || return 1
     else
       if [ -f "$_real_ca" ] && [ ! "$IS_RENEW" ]; then
         cp "$_real_ca" "$_backup_path/ca.bak"
       fi
-      cat "$CA_CERT_PATH" >"$_real_ca"
+      cat "$CA_CERT_PATH" >"$_real_ca" || return 1
     fi
   fi
 
@@ -4766,9 +4766,9 @@ _installcert() {
       cp "$_real_key" "$_backup_path/key.bak"
     fi
     if [ -f "$_real_key" ]; then
-      cat "$CERT_KEY_PATH" >"$_real_key"
+      cat "$CERT_KEY_PATH" >"$_real_key" || return 1
     else
-      cat "$CERT_KEY_PATH" >"$_real_key"
+      cat "$CERT_KEY_PATH" >"$_real_key" || return 1
       chmod 600 "$_real_key"
     fi
   fi
@@ -4778,7 +4778,7 @@ _installcert() {
     if [ -f "$_real_fullchain" ] && [ ! "$IS_RENEW" ]; then
       cp "$_real_fullchain" "$_backup_path/fullchain.bak"
     fi
-    cat "$CERT_FULLCHAIN_PATH" >"$_real_fullchain"
+    cat "$CERT_FULLCHAIN_PATH" >"$_real_fullchain" || return 1
   fi
 
   if [ "$_reload_cmd" ]; then
@@ -5569,6 +5569,7 @@ Parameters:
   --ca-path                         Specifies directory containing CA certificates in PEM format, used by wget or curl.
   --nocron                          Only valid for '--install' command, which means: do not install the default cron job. In this case, the certs will not be renewed automatically.
   --no-color                        Do not output color text.
+  --force-color                     Force output of color text. Useful for non-interactive use with the aha tool for HTML E-Mails.
   --ecc                             Specifies to use the ECC cert. Valid for '--install-cert', '--renew', '--revoke', '--toPkcs' and '--createCSR'
   --csr                             Specifies the input csr.
   --pre-hook                        Command to be run before obtaining any certificates.
@@ -6033,6 +6034,9 @@ _process() {
         ;;
       --no-color)
         export ACME_NO_COLOR=1
+        ;;
+      --force-color)
+        export ACME_FORCE_COLOR=1
         ;;
       --ecc)
         _ecc="isEcc"
