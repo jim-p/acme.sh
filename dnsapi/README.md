@@ -264,9 +264,18 @@ when needed.
 ## 14. Use Linode domain API
 
 First you need to login to your Linode account to get your API Key.
-[https://manager.linode.com/profile/api](https://manager.linode.com/profile/api)
 
-Then add an API key with label *ACME* and copy the new key.
+  * [Classic Manager](https://manager.linode.com/profile/api)
+
+   Under "Add an API key", Give the new key a "Label" (we recommend *ACME*),
+   set the expiry to never, "Create API Key", and copy the new key into the `LINODE_API_KEY` command
+   below.
+
+  * [Cloud Manager](https://cloud.linode.com/profile/tokens)
+
+   Click on "Add a Personal Access Token". Give the new key a "Label" (we
+   recommend *ACME*), give it Read/Write access to "Domains". "Submit", and
+   copy the new key into the `LINODE_API_KEY` command below.
 
 ```sh
 export LINODE_API_KEY="..."
@@ -1013,6 +1022,59 @@ Now you can issue a certificate.
 ```sh
 acme.sh --issue --dns dns_namecheap -d example.com -d *.example.com
 ```
+
+## 54. Use MyDNS.JP API
+
+First, register to MyDNS.JP and get MasterID and Password.
+
+```
+export MYDNSJP_MasterID=MasterID
+export MYDNSJP_Password=Password
+```
+
+To issue a certificate:
+
+```
+acme.sh --issue --dns dns_mydnsjp -d example.com -d www.example.com
+```
+The `MYDNSJP_MasterID` and `MYDNSJP_Password` will be saved in `~/.acme.sh/account.conf` and will be reused when needed.
+
+## 55. Use hosting.de API
+
+Create an API key in your hosting.de account here: https://secure.hosting.de
+
+The key needs the following rights:
+- DNS_ZONES_EDIT
+- DNS_ZONES_LIST
+
+Set your API Key and endpoint:
+
+```
+export HOSTINGDE_APIKEY='xxx'
+export HOSTINGDE_ENDPOINT='https://secure.hosting.de'
+```
+
+The plugin can also be used for the http.net API. http.net customers have to set endpoint to https://partner.http.net.
+
+Ok, let's issue a cert now:
+```
+acme.sh --issue --dns dns_hostingde -d example.com -d *.example.com
+```
+
+The hosting.de API key and endpoint will be saved in `~/.acme.sh/account.conf` and will be reused when needed.
+
+## 56. Use Neodigit.net API
+
+```
+export NEODIGIT_API_TOKEN="eXJxTkdUVUZmcHQ3QWJackQ4ZGlMejRDSklRYmo5VG5zcFFKK2thYnE0WnVnNnMy"
+```
+
+Ok, let's issue a cert now:
+```
+acme.sh --issue --dns dns_neodigit -d example.com -d www.example.com
+```
+
+Neodigit API Token will be saved in `~/.acme.sh/account.conf` and will be used when needed.
 
 # Use custom API
 
