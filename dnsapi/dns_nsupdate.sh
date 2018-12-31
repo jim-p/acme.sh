@@ -18,7 +18,7 @@ dns_nsupdate_add() {
   _saveaccountconf NSUPDATE_SERVER "${THISNSUPDATE_SERVER}"
   _saveaccountconf NSUPDATE_SERVER_PORT "${THISNSUPDATE_SERVER_PORT}"
   _saveaccountconf NSUPDATE_KEY "${THISNSUPDATE_KEY}"
- __saveaccountconf NSUPDATE_ZONE "${THISNSUPDATE_ZONE}"
+  _saveaccountconf NSUPDATE_ZONE "${THISNSUPDATE_ZONE}"
   _info "adding ${fulldomain}. 60 in txt \"${txtvalue}\""
   [ -n "$DEBUG" ] && [ "$DEBUG" -ge "$DEBUG_LEVEL_1" ] && nsdebug="-d"
   [ -n "$DEBUG" ] && [ "$DEBUG" -ge "$DEBUG_LEVEL_2" ] && nsdebug="-D"
