@@ -3104,27 +3104,29 @@ _clearupwebbroot() {
     return 0
   fi
 
-	h_api="$(_findHook "$d" httpapi "$_currentRoot")"
-	_debug h_api "$h_api"
-	if [ "$h_api" ]; then
-	  _info "Found domain http api file: $h_api"
-	  (
-		if ! . "$h_api"; then
-		  _err "Load file $h_api error. Please check your api file and try again."
-		  return 1
-		fi
+	if [ "$vtype" = "$VTYPE_HTTP" ]; then
+		h_api="$(_findHook "$d" httpapi "$_currentRoot")"
+		_debug h_api "$h_api"
+		if [ "$h_api" ]; then
+		  _info "Found domain http api file: $h_api"
+		  (
+			if ! . "$h_api"; then
+			  _err "Load file $h_api error. Please check your api file and try again."
+			  return 1
+			fi
 
-		rmcommand="${_currentRoot}_rm"
-		if ! _exists "$rmcommand"; then
-		  _err "It seems that your api file is not correct, it must have a function named: $rmcommand"
-		  return 1
-		fi
+			rmcommand="${_currentRoot}_rm"
+			if ! _exists "$rmcommand"; then
+			  _err "It seems that your api file is not correct, it must have a function named: $rmcommand"
+			  return 1
+			fi
 
-		if ! $rmcommand "$__domain" "$3"; then
-		  _err "Error rm webroot api for domain:$__webroot"
-		  return 1
+			if ! $rmcommand "$__domain" "$3"; then
+			  _err "Error rm webroot api for domain:$__webroot"
+			  return 1
+			fi
+		  )
 		fi
-	  )
 
 	else
 		_rmpath=""
