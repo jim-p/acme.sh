@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 
-VER=2.8.4
+VER=2.8.5
 
 PROJECT_NAME="acme.sh"
 
@@ -270,31 +270,31 @@ _usage() {
 __debug_bash_helper() {
   # At this point only do for --debug 3
   if [ "${DEBUG:-$DEBUG_LEVEL_NONE}" -lt "$DEBUG_LEVEL_3" ]; then
-    echo ""
     return
   fi
   # Return extra debug info when running with bash, otherwise return empty
   # string.
   if [ -z "${BASH_VERSION}" ]; then
-    echo ""
     return
   fi
   # We are a bash shell at this point, return the filename, function name, and
   # line number as a string
   _dbh_saveIFS=$IFS
   IFS=" "
-  # Must use eval or syntax error happens under dash
+  # Must use eval or syntax error happens under dash. The eval should use
+  # single quotes as older versions of busybox had a bug with double quotes and
+  # eval.
   # Use 'caller 1' as we want one level up the stack as we should be called
   # by one of the _debug* functions
-  eval "_dbh_called=($(caller 1))"
+  eval '_dbh_called=($(caller 1))'
   IFS=$_dbh_saveIFS
-  _dbh_file=${_dbh_called[2]}
+  eval '_dbh_file=${_dbh_called[2]}'
   if [ -n "${_script_home}" ]; then
     # Trim off the _script_home directory name
-    _dbh_file=${_dbh_file#$_script_home/}
+    eval '_dbh_file=${_dbh_file#$_script_home/}'
   fi
-  _dbh_function=${_dbh_called[1]}
-  _dbh_lineno=${_dbh_called[0]}
+  eval '_dbh_function=${_dbh_called[1]}'
+  eval '_dbh_lineno=${_dbh_called[0]}'
   printf "%-40s " "$_dbh_file:${_dbh_function}:${_dbh_lineno}"
 }
 
@@ -2032,7 +2032,7 @@ _send_signed_request() {
     _debug code "$code"
 
     _debug2 original "$response"
-    if echo "$responseHeaders" | grep -i "Content-Type: application/json" >/dev/null 2>&1; then
+    if echo "$responseHeaders" | grep -i "Content-Type: *application/json" >/dev/null 2>&1; then
       response="$(echo "$response" | _normalizeJson)"
     fi
     _debug2 response "$response"
@@ -2053,8 +2053,10 @@ _send_signed_request() {
         continue
       fi
     fi
-    break
+    return 0
   done
+  _info "Giving up sending to CA server after $MAX_REQUEST_RETRY_TIMES retries."
+  return 1
 
 }
 
@@ -2426,7 +2428,7 @@ __initHome() {
   if [ -z "$ACCOUNT_CONF_PATH" ]; then
     ACCOUNT_CONF_PATH="$_DEFAULT_ACCOUNT_CONF_PATH"
   fi
-
+  _debug3 ACCOUNT_CONF_PATH "$ACCOUNT_CONF_PATH"
   DEFAULT_LOG_FILE="$LE_CONFIG_HOME/$PROJECT_NAME.log"
 
   DEFAULT_CA_HOME="$LE_CONFIG_HOME/ca"
@@ -3407,7 +3409,7 @@ _on_issue_success() {
     fi
   fi
 
-  if _hasfield "$Le_Webroot" "$W_DNS"; then
+  if _hasfield "$Le_Webroot" "$W_DNS" && [ -z "$FORCE_DNS_MANUAL" ]; then
     _err "$_DNS_MANUAL_WARN"
   fi
 
@@ -3487,7 +3489,7 @@ _regAccount() {
   fi
 
   _debug2 responseHeaders "$responseHeaders"
-  _accUri="$(echo "$responseHeaders" | grep -i "^Location:" | _head_n 1 | cut -d ' ' -f 2 | tr -d "\r\n")"
+  _accUri="$(echo "$responseHeaders" | grep -i "^Location:" | _head_n 1 | cut -d ':' -f 2- | tr -d "\r\n ")"
   _debug "_accUri" "$_accUri"
   if [ -z "$_accUri" ]; then
     _err "Can not find account id url."
@@ -3861,9 +3863,11 @@ _check_dns_entries() {
       _sleep 10
     else
       _info "All success, let's return"
-      break
+      return 0
     fi
   done
+  _info "Timed out waiting for DNS."
+  return 1
 
 }
 
@@ -4049,7 +4053,7 @@ issue() {
         _on_issue_err "$_post_hook"
         return 1
       fi
-      Le_LinkOrder="$(echo "$responseHeaders" | grep -i '^Location.*$' | _tail_n 1 | tr -d "\r\n" | cut -d " " -f 2)"
+      Le_LinkOrder="$(echo "$responseHeaders" | grep -i '^Location.*$' | _tail_n 1 | tr -d "\r\n" | cut -d ":" -f 2-)"
       _debug Le_LinkOrder "$Le_LinkOrder"
       Le_OrderFinalize="$(echo "$response" | _egrep_o '"finalize" *: *"[^"]*"' | cut -d '"' -f 4)"
       _debug Le_OrderFinalize "$Le_OrderFinalize"
@@ -4129,7 +4133,7 @@ $_authorizations_map"
 
       if [ "$ACME_VERSION" = "2" ]; then
         _idn_d="$(_idn "$d")"
-        _candindates="$(echo "$_authorizations_map" | grep "^$_idn_d,")"
+        _candindates="$(echo "$_authorizations_map" | grep -i "^$_idn_d,")"
         _debug2 _candindates "$_candindates"
         if [ "$(echo "$_candindates" | wc -l)" -gt 1 ]; then
           for _can in $_candindates; do
@@ -4587,7 +4591,7 @@ $_authorizations_map"
       return 1
     fi
     if [ -z "$Le_LinkOrder" ]; then
-      Le_LinkOrder="$(echo "$responseHeaders" | grep -i '^Location.*$' | _tail_n 1 | tr -d "\r\n" | cut -d " " -f 2)"
+      Le_LinkOrder="$(echo "$responseHeaders" | grep -i '^Location.*$' | _tail_n 1 | tr -d "\r\n" | cut -d ":" -f 2-)"
     fi
 
     _savedomainconf "Le_LinkOrder" "$Le_LinkOrder"
@@ -5638,7 +5642,7 @@ _deactivate() {
       return 1
     fi
 
-    authzUri="$(echo "$responseHeaders" | grep "^Location:" | _head_n 1 | cut -d ' ' -f 2 | tr -d "\r\n")"
+    authzUri="$(echo "$responseHeaders" | grep "^Location:" | _head_n 1 | cut -d ':' -f 2- | tr -d "\r\n")"
     _debug "authzUri" "$authzUri"
     if [ "$code" ] && [ ! "$code" = '201' ]; then
       _err "new-authz error: $response"
@@ -6369,6 +6373,8 @@ _installOnline() {
     chmod +x $PROJECT_ENTRY
     if ./$PROJECT_ENTRY install "$_nocron" "" "$_noprofile"; then
       _info "Install success!"
+      _initpath
+      _saveaccountconf "UPGRADE_HASH" "$(_getMasterHash)"
     fi
 
     cd ..
@@ -6378,9 +6384,15 @@ _installOnline() {
   )
 }
 
+_getMasterHash() {
+  _hash_url="https://api.github.com/repos/Neilpang/acme.sh/git/refs/heads/master"
+  _get $_hash_url | tr -d "\r\n" | tr '{},' '\n' | grep '"sha":' | cut -d '"' -f 4
+}
+
 upgrade() {
   if (
     _initpath
+    [ -z "$FORCE" ] && [ "$(_getMasterHash)" = "$(_readaccountconf "UPGRADE_HASH")" ] && _info "Already uptodate!" && exit 0
     export LE_WORKING_DIR
     cd "$LE_WORKING_DIR"
     _installOnline "nocron" "noprofile"
