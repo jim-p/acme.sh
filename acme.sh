@@ -3338,6 +3338,7 @@ _clearupdns() {
 # webroot  removelevel tokenfile
 _clearupwebbroot() {
   __webroot="$1"
+  __domain="$4"
   if [ -z "$__webroot" ]; then
     _debug "no webroot specified, skip"
     return 0
@@ -4824,7 +4825,7 @@ $_authorizations_map"
       _debug acmevalidationv1 "$acmevalidationv1"
       if ! _starttlsserver "$d" "" "$Le_TLSPort" "$keyauthorization" "$_ncaddr" "$acmevalidationv1"; then
         _err "Start tls server error."
-        _clearupwebbroot "$_currentRoot" "$removelevel" "$token"
+        _clearupwebbroot "$_currentRoot" "$removelevel" "$token" "$d"
         _clearup
         _on_issue_err "$_post_hook" "$vlist"
         return 1
